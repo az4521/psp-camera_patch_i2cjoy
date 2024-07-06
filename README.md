@@ -4,6 +4,12 @@ This plugin can add right analog stick support to the PSP, using a TI ADS111x AD
 
 Based on camera_patch_lite by Freakler and CtrlHook from [Op-ditto](https://github.com/Operation-DITTO/ctrlHook)
 
+the custom PCBs can be ordered from oshpark if you would like
+
+https://oshpark.com/shared_projects/hx9D8oWi
+
+I recommmend a flex pcb, because it's much thinner. the BOM is a single 0.1uf 0402 capacitor, and a TI ADS1115IDGS
+
 
 #### Installation:
 Copy the .prx & .ini files to your seplugins folder and add "ms0:/seplugins/camera_patch_i2joy.prx 1" to the game.txt file.
