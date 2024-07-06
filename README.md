@@ -2,7 +2,7 @@
 
 This plugin can add right analog stick support to the PSP, using a TI ADS111x ADC connected to the PSP's i2c bus.
 
-Based on camera_patch_lite by Freakler
+Based on camera_patch_lite by Freakler and CtrlHook from [Op-ditto](https://github.com/Operation-DITTO/ctrlHook)
 
 
 #### Installation:
