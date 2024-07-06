@@ -1,10 +1,12 @@
-# camera_patch_lite
+# camera_patch_i2cjoy
 
-This plugin can add right analog stick support to PSP games on the Adrenaline eCFW. 
+This plugin can add right analog stick support to the PSP, using a TI ADS111x ADC connected to the PSP's i2c bus.
+
+Based on camera_patch_lite by Freakler
 
 
 #### Installation:
-Copy the .prx & .ini files to your seplugins folder and add "ms0:/seplugins/camera_patch_lite.prx 1" to the game.txt file.
+Copy the .prx & .ini files to your seplugins folder and add "ms0:/seplugins/camera_patch_i2joy.prx 1" to the game.txt file.
 
 
 #### Notes:

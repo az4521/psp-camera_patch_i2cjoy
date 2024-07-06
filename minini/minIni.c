@@ -50,6 +50,11 @@
   #define _tcsicmp  stricmp
   #define _tcslen   strlen
   #define _tcsncpy  strncpy
+
+  #if defined PORTABLE_STRNICMP
+    int strnicmp(const TCHAR *s1, const TCHAR *s2, size_t n);
+  #endif
+
   #define _tcsnicmp strnicmp
   #define _tcsrchr  strrchr
   #define _tcstol   strtol
