@@ -24,7 +24,17 @@ PSP_MODULE_INFO("camera_patch_lite", 0x1007, 1, 0); // 0x1007
 #define PSP_CTRL_SELECT 0x000001
 #define PSP_CTRL_START 0x000008
 
-#define ADS1115_ADDRESS 0x48
+#define ADS1115_ADDRESS (0x48)
+#define ADS1115_REG_CONVERT (0x00)
+#define ADS1115_REG_CONFIG (0x01)
+
+#define ADS1115_START_SINGLE_CONV (0x8000)
+#define ADS1115_MODE_SINGLE_CONV  (0x0100)
+#define ADS1115_SPS_128   (0x0080)
+#define ADS1115_GAIN_4V (0x0200)
+#define ADS1115_COMP_DISABLE (0x0003)
+#define ADS1115_MUX0 (0x4000)
+#define ADS1115_MUX1 (0x5000)
 
 
 #define Rx Rsrv[0] // for readability
@@ -59,6 +69,9 @@ int BTN_CTRL_LEFT;
 int BTN_CTRL_RIGHT;
 int BTN_CTRL_UP;
 int BTN_CTRL_DOWN;
+
+static volatile u8 rx_analog = 127;
+static volatile u8 ry_analog = 127;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -180,8 +193,8 @@ int sceCtrlReadBufPatched_Analog(SceCtrlData* pad, int nBufs, int a2, int mode) 
 	for (int i = 0; i < nBufs; i++) {
 		// read analogue from i2c
 
-		pad[i].Rx = 127;
-		pad[i].Ry = 127;
+		pad[i].Rx = rx_analog;
+		pad[i].Ry = ry_analog;
 	}
 
 	pspSdkSetK1(k1);
@@ -325,9 +338,6 @@ int sceCtrlReadBufPatched_Buttons(SceCtrlData* pad, int nBufs, int a2, int mode)
 				}
 			}
 		}
-
-		pad[i].Ry = 127;
-		pad[i].Rx = 127;
 	}
 
 	pspSdkSetK1(k1); // restore k1
@@ -339,14 +349,6 @@ int camera_thread(SceSize args, void* argp) {
 
 	while (!sceKernelFindModuleByName("sceKernelLibrary")) // wait for the kernel to boot up
 		sceKernelDelayThread(100000);
-
-	//load i2c functions
-	sceI2cMasterTransmit = (void*)sctrlHENFindFunction("sceLowIO_Driver", "sceI2c_driver", 0x8CBD8CCF);
-	sceI2cMasterTransmitReceive = (void*)sctrlHENFindFunction("sceLowIO_Driver", "sceI2c_driver", 0x47BDEAAA);
-
-	//initialize ADS1115
-
-
 
 	try_get_game_info(); // read game id from umd file
 
@@ -373,6 +375,49 @@ int camera_thread(SceSize args, void* argp) {
 	return 0;
 }
 
+int analog_thread(SceSize args, void* argp) {
+	sceKernelDelayThread(3000000); // delay 3 sec for game to load
+
+	while (!sceKernelFindModuleByName("sceKernelLibrary")) // wait for the kernel to boot up
+		sceKernelDelayThread(100000);
+
+	//load i2c functions
+	sceI2cMasterTransmit = (void*)sctrlHENFindFunction("sceLowIO_Driver", "sceI2c_driver", 0x8CBD8CCF);
+	sceI2cMasterTransmitReceive = (void*)sctrlHENFindFunction("sceLowIO_Driver", "sceI2c_driver", 0x47BDEAAA);
+
+	u16 config = ADS1115_COMP_DISABLE | ADS1115_SPS_128 | ADS1115_MODE_SINGLE_CONV | ADS1115_GAIN_4V | ADS1115_START_SINGLE_CONV | ADS1115_MUX0;
+	u8 tx_buf[3] = {0};
+	u8 rx_buf[2] = {0};
+
+
+	while (1) {
+		config ^= ((~ADS1115_MUX0) & ADS1115_MUX1); //toggle which axis is being read
+
+		//write config to the config register, triggering the conversion
+		tx_buf[0] = ADS1115_REG_CONFIG;
+		tx_buf[1] = (config >> 8);
+		tx_buf[2] = (config & 0xFF);
+		sceI2cMasterTransmit(ADS1115_ADDRESS, tx_buf, 3);
+
+		//wait for the conversion to complete (125 SPS, close enough to the configured 128)
+		sceKernelDelayThread(8000);
+
+		//read result from the conversion register
+		tx_buf[0] = ADS1115_REG_CONVERT;
+		sceI2cMasterTransmitReceive(ADS1115_ADDRESS, tx_buf, 1, ADS1115_ADDRESS, rx_buf, 2);
+		
+		//TODO: process the result
+
+		if (config & ((~ADS1115_MUX0) & ADS1115_MUX1)) {
+			//TODO: mutex
+			rx_analog = rx_buf[1];
+		} else {
+			//TODO: mutex
+			ry_analog = rx_buf[1];
+		}
+	}
+}
+
 int module_start(SceSize args, void* argp) {
 	// ini location depending on where prx is
 	strcpy(config, (char*)argp);
@@ -383,9 +428,13 @@ int module_start(SceSize args, void* argp) {
 	strcpy(ptr + 1, config_name);
 
 	// create threads
-	SceUID thid = sceKernelCreateThread("camera_thread", camera_thread, 0x18, 0x1000, 0, NULL);
-	if (thid >= 0) {
-		sceKernelStartThread(thid, args, argp);
+	SceUID analog_thid = sceKernelCreateThread("analog_thread", analog_thread, 0x18, 0x1000, 0, NULL);
+	if (analog_thid >= 0) {
+		sceKernelStartThread(analog_thid, args, argp);
+	}
+	SceUID camera_thid = sceKernelCreateThread("camera_thread", camera_thread, 0x18, 0x1000, 0, NULL);
+	if (camera_thid >= 0) {
+		sceKernelStartThread(camera_thid, args, argp);
 	}
 
 	sceKernelExitDeleteThread(0);
